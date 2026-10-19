@@ -1,0 +1,1038 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Observability Sandbox</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: instrument panel. Rendered ego-frame road plate at left, measurement rail at right, evidence strip below. */
+:root {
+  --bg: #F1F3F4; --surface: #FFFFFF; --line: #DCE0E3; --ink: #16222A;
+  --muted: #65727A; --teal: #1F7A6F; --amber: #C07E16; --red: #B2443C; --plate: #23262A;
+  --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1518; --surface: #151F24; --line: #27343A; --ink: #E6EDEF;
+    --muted: #93A2A9; --teal: #46BBA4; --amber: #E0A23F; --red: #E0756A; --plate: #16191C;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1518; --surface: #151F24; --line: #27343A; --ink: #E6EDEF;
+  --muted: #93A2A9; --teal: #46BBA4; --amber: #E0A23F; --red: #E0756A; --plate: #16191C;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+.wrap {
+  max-width: 1320px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 22px 40px; display: flex; flex-direction: column; gap: 18px;
+}
+
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 18px; }
+h1 { margin: 0; font-size: clamp(21px, 3.2vw, 29px); font-weight: 700; letter-spacing: -0.02em; text-wrap: balance; }
+.sub { margin: 0; color: var(--muted); max-width: 64ch; font-size: 14px; }
+.tag { font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 3px 7px; white-space: nowrap; }
+
+.split { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 920px) { .split { grid-template-columns: minmax(0, 1fr); } }
+
+.plate-box { position: relative; background: var(--plate); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; aspect-ratio: 1 / 1; max-width: 100%; touch-action: none; cursor: crosshair; }
+canvas { display: block; width: 100%; height: 100%; }
+.hud { position: absolute; pointer-events: none; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.03em; color: rgba(228,238,240,0.7); text-shadow: 0 1px 3px rgba(0,0,0,0.75); }
+.hud.bl { left: 10px; bottom: 9px; }
+.hud.br { right: 10px; bottom: 9px; display: flex; align-items: center; gap: 6px; }
+.hud.br i { display: block; width: 52px; height: 1px; background: rgba(228,238,240,0.55); }
+.hud.tl { left: 10px; top: 9px; font-size: 11.5px; }
+.hud.tl b { color: #8FE8D2; font-weight: 600; }
+.hud.tl em { font-style: normal; color: rgba(228,238,240,0.5); }
+
+.rail { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 13px 14px; min-width: 0; }
+.card h2 { margin: 0 0 9px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+.readout { display: flex; align-items: flex-end; gap: 14px; }
+.big { font-family: var(--mono); font-size: 42px; font-weight: 500; line-height: 0.95; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--teal); }
+.big.dim { color: var(--muted); }
+.readout dl { margin: 0; display: grid; grid-template-columns: auto auto; gap: 1px 10px; font-size: 12.5px; }
+.readout dt { color: var(--muted); }
+.readout dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.meter { margin-top: 11px; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--teal); width: 0%; }
+
+.rows { display: grid; gap: 7px; }
+.row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; }
+.row span:first-child { color: var(--muted); min-width: 0; }
+.row span:last-child { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.row .hit { color: var(--teal); } .row .warn { color: var(--amber); } .row .bad { color: var(--red); }
+
+.btns { display: flex; flex-wrap: wrap; gap: 6px; }
+button { font: 500 12.5px/1 var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 7px 10px; cursor: pointer; }
+button:hover { border-color: var(--teal); color: var(--teal); }
+button[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: #fff; }
+button:focus-visible, label:focus-within, input:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+.checks { display: grid; gap: 5px; margin-top: 10px; }
+.checks label { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+.checks input { accent-color: var(--teal); margin: 0; }
+
+.speed { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+.speed input[type=range] { flex: 1; min-width: 0; accent-color: var(--teal); }
+.speed output { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 18px; min-width: 104px; text-align: right; }
+.speed output small { font-size: 11px; color: var(--muted); }
+
+.objs { display: grid; gap: 4px; font-size: 12.5px; }
+.obj { display: grid; grid-template-columns: 9px 1fr auto auto; align-items: center; gap: 8px; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.obj i { width: 9px; height: 9px; border-radius: 2px; display: block; }
+.obj .nm { font-family: var(--sans); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.obj .rg { color: var(--muted); }
+
+.formula { font-family: var(--mono); font-size: 12.5px; line-height: 1.75; overflow-x: auto; white-space: nowrap; padding-bottom: 2px; }
+.formula b { font-weight: 600; color: var(--teal); }
+
+.strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 880px) { .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 460px) { .strip { grid-template-columns: minmax(0, 1fr); } }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 13px; }
+.stat .k { font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.stat .v { font-family: var(--mono); font-size: 25px; font-variant-numeric: tabular-nums; margin-top: 3px; letter-spacing: -0.01em; }
+.stat .n { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.stat.lead .v { color: var(--teal); }
+
+footer { border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 7px; font-size: 12.5px; color: var(--muted); }
+footer a { color: var(--teal); }
+.authors { color: var(--ink); font-size: 13.5px; }
+.authors b { font-weight: 600; }
+.legend { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; }
+.legend i { display: block; width: 110px; height: 8px; border-radius: 2px; background: linear-gradient(90deg, #11171a, #2b4a4a, #58a894, #a9efdc); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <h1>Observability Sandbox</h1>
+    <span class="tag">O(v;G) &middot; nuScenes 6-camera rig &middot; 0.4 m grid</span>
+    <p class="sub">An ego-frame bird's-eye view, the way a perception stack sees one. The ego stays at the origin and the world moves past it. Traffic follows lanes, keeps headway under a car-following model and obeys the signal. Every cell is rescored live by the measure from the paper: angular coverage from each camera multiplied by first-hit visibility along a marched ray. Where the cameras can resolve the surface you see road. Where they cannot it goes dark, whatever the network believes is there.</p>
+  </header>
+
+  <div class="split">
+    <div class="plate-box" id="plateBox">
+      <canvas id="bev"></canvas>
+      <div class="hud tl" id="hudTop">ego <b>10.0 m/s</b></div>
+      <div class="hud bl">ego frame &middot; X forward &middot; 200 &times; 200 cells at 0.4 m</div>
+      <div class="hud br"><i></i>10 m</div>
+    </div>
+
+    <div class="rail">
+
+      <div class="card">
+        <h2>Ego and stopping corridor</h2>
+        <div class="speed">
+          <input type="range" id="rSpeed" min="0" max="30" step="0.5" value="10" aria-label="desired ego speed">
+          <output id="oSpeed">10.0 m/s<br><small>36 km/h</small></output>
+        </div>
+        <div class="rows">
+          <div class="row"><span>Actual speed, after car following</span><span id="sActual">&mdash;</span></div>
+          <div class="row"><span>Stopping distance (0.6 s reaction, 4.0 m/s&sup2;)</span><span id="sStop">&mdash;</span></div>
+          <div class="row"><span>Corridor observed, to 40 m</span><span id="sCorr">&mdash;</span></div>
+          <div class="row"><span>Nearest unobserved object</span><span id="sNear">&mdash;</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Per-object observability</h2>
+        <div class="objs" id="objList"></div>
+        <p class="sub" style="font-size:12px;margin:10px 0 0">Each vehicle is scored by the best-observed cell of its own footprint. This is the granularity at which the measure beats softmax confidence, 0.762 against 0.719.</p>
+      </div>
+
+      <div class="card">
+        <h2>Cell under cursor</h2>
+        <div class="readout">
+          <div class="big dim" id="oVal">&mdash;</div>
+          <dl>
+            <dt>range</dt><dd id="oRange">&mdash;</dd>
+            <dt>best camera</dt><dd id="oCam">&mdash;</dd>
+            <dt>coverage</dt><dd id="oCov">&mdash;</dd>
+            <dt>first hit</dt><dd id="oVis">&mdash;</dd>
+          </dl>
+        </div>
+        <div class="meter"><i id="oMeter"></i></div>
+      </div>
+
+      <div class="card">
+        <h2>Scene</h2>
+        <div class="rows">
+          <div class="row"><span>Blind area within 40 m (O &lt; 0.20)</span><span class="warn" id="sBlind">&mdash;</span></div>
+          <div class="row"><span>Well observed (O &ge; 0.50)</span><span class="hit" id="sGood">&mdash;</span></div>
+          <div class="row"><span>Vehicles in scene</span><span id="sCars">&mdash;</span></div>
+        </div>
+        <div class="btns" style="margin-top:11px">
+          <button id="bScene0" aria-pressed="true">Intersection</button>
+          <button id="bScene1" aria-pressed="false">Freeway</button>
+          <button id="bScene2" aria-pressed="false">Left turn</button>
+          <button id="bAdd">Add vehicle</button>
+          <button id="bPlay" aria-pressed="true">Pause</button>
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="cField" checked> observability overlay</label>
+          <label><input type="checkbox" id="cLabels" checked> per-object scores on the plate</label>
+          <label><input type="checkbox" id="cCorr" checked> stopping corridor</label>
+          <label><input type="checkbox" id="cRings" checked> range rings</label>
+          <label><input type="checkbox" id="cFov"> camera field-of-view boundaries</label>
+          <label><input type="checkbox" id="cBlind"> mark everything below 0.20</label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>The measure, as implemented here</h2>
+        <div class="formula">
+          <b>O(v)</b> = max<sub>i</sub> &nbsp; c<sub>i</sub>(v) &middot; s<sub>i</sub>(v)<br>
+          c<sub>i</sub>(v) = min(1, (f<sub>i</sub>&middot;r / d)<sup>2</sup> / &pi;<sub>full</sub>)<br>
+          s<sub>i</sub>(v) = 1 at the first occupied hit
+        </div>
+        <div class="rows" style="margin-top:9px">
+          <div class="row"><span>&pi;<sub>full</sub></span><span>965.0</span></div>
+          <div class="row"><span>object scale r</span><span>0.40 m</span></div>
+          <div class="row"><span>saturation range, front camera</span><span>16.3 m</span></div>
+          <div class="row"><span>free parameters</span><span>1</span></div>
+          <div class="row"><span>training required</span><span>none</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Falloff check, computed live</h2>
+        <div class="rows">
+          <div class="row"><span>coverage at 20 m</span><span id="v20">&mdash;</span></div>
+          <div class="row"><span>coverage at 40 m</span><span id="v40">&mdash;</span></div>
+          <div class="row"><span>coverage at 70 m</span><span id="v70">&mdash;</span></div>
+        </div>
+        <p class="sub" style="font-size:12px;margin:9px 0 0">These three values are produced by the page, not typed into it. They are the figures reported in the paper, which is why they are shown here.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="strip">
+    <div class="stat lead"><div class="k">Per object, AUROC</div><div class="v">0.762</div><div class="n">geometric observability</div></div>
+    <div class="stat"><div class="k">Per object, AUROC</div><div class="v">0.719</div><div class="n">softmax confidence</div></div>
+    <div class="stat"><div class="k">LiDAR oracle</div><div class="v">0.774</div><div class="n">not available at runtime</div></div>
+    <div class="stat"><div class="k">On predicted geometry</div><div class="v">0.671</div><div class="n">the honest ceiling</div></div>
+  </div>
+
+  <footer>
+    <div class="authors"><b>Akila Lourdes Miriyala Francis</b> &nbsp;&middot;&nbsp; <b>Akilan Manivannan</b> &nbsp;&middot;&nbsp; <a href="https://akilanmanivannan.com">akilanmanivannan.com</a></div>
+    <div class="legend">O = 0 <i></i> O = 1</div>
+    <div>Measured on a sealed test split of 3,008 frames and 40,863 objects, opened once after the method was frozen. Traffic runs on an intelligent-driver car-following model with signal control. In this two-dimensional reduction the six cameras are co-located at the ego origin.</div>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------------------------------------------------------------- constants
+  var N = 200, RES = 0.4, EXT = 40, SPAN = 2 * EXT;
+  var PI_FULL = 965.0, R_OBJ = 0.4;
+  var NA = 1440, STEP = 0.3, RMAX = 58;
+  var ROADPX = 1100, RS = ROADPX / SPAN;
+  var T_REACT = 0.6, DECEL = 4.0, LANE_W = 3.4, BLIND = 0.20;
+  // intelligent-driver model
+  var IDM_S0 = 2.6, IDM_T = 1.5, IDM_A = 1.4, IDM_B = 2.4;
+  var JHALF = 8.4;                       // half width of the junction box plus clearance
+  var CYCLE = 28, G_MAIN = 12, G_CROSS = 12, AMBER = 2;
+
+  var CAMS = [
+    { id: "FRONT",       f: 1266.4, yaw:    0, hfov: 70  },
+    { id: "FRONT_LEFT",  f: 1272.6, yaw:   55, hfov: 70  },
+    { id: "FRONT_RIGHT", f: 1260.8, yaw:  -55, hfov: 70  },
+    { id: "BACK_LEFT",   f: 1256.7, yaw:  110, hfov: 70  },
+    { id: "BACK_RIGHT",  f: 1259.5, yaw: -110, hfov: 70  },
+    { id: "BACK",        f:  809.2, yaw:  180, hfov: 110 }
+  ].map(function (c) {
+    c.yawR = c.yaw * Math.PI / 180; c.half = c.hfov * Math.PI / 360;
+    c.k = (c.f * R_OBJ) * (c.f * R_OBJ) / PI_FULL;
+    return c;
+  });
+
+  var SHAPE = {
+    car:   [{ du: 0,   L: 4.65, W: 1.90 }],
+    suv:   [{ du: 0,   L: 5.00, W: 2.05 }],
+    van:   [{ du: 0,   L: 5.60, W: 2.10 }],
+    truck: [{ du: 8.6, L: 6.80, W: 2.50 }, { du: -4.1, L: 14.60, W: 2.60 }],
+    ego:   [{ du: 0,   L: 4.55, W: 1.92 }]
+  };
+  Object.keys(SHAPE).forEach(function (k) {                 // longitudinal extents, metres
+    var b = SHAPE[k];
+    SHAPE[k].front = b.reduce(function (a, x) { return Math.max(a, x.du + x.L / 2); }, -1e9);
+    SHAPE[k].rear  = b.reduce(function (a, x) { return Math.min(a, x.du - x.L / 2); },  1e9);
+    SHAPE[k].wide  = b.reduce(function (a, x) { return Math.max(a, x.W); }, 0);
+  });
+  var NAMES = { car: "car", suv: "SUV", van: "van", truck: "tractor-trailer" };
+  var PAINT = ["#2E4A66", "#7D2F2C", "#3C4A3A", "#5B5F67", "#1F3038", "#6E5A2E", "#8A8E95", "#3A2E4A"];
+  var EGO_PAINT = PAINT.push("#E9EDEF") - 1;
+
+  // Roads are built so y = 0 is the ego's own lane, and are periodic in X over
+  // 80 m so the plate scrolls seamlessly. Lanes along x carry a fixed y; lanes
+  // along y carry a fixed PLATE x, which scrolls with the ego.
+  var SCENES = [
+    { road: "intersection", speed: 11, signal: true,
+      lanes: [{ ax: "x", at:  0.0, dir:  1 }, { ax: "x", at: -3.7, dir:  1 },
+              { ax: "x", at:  3.7, dir: -1 }, { ax: "x", at:  7.4, dir: -1 },
+              { ax: "y", at:  3.7, dir:  1 }, { ax: "y", at:  7.4, dir:  1 },
+              { ax: "y", at:  0.0, dir: -1 }, { ax: "y", at: -3.7, dir: -1 }],
+      cars: [
+        { ax: "x", at:  0.0, dir:  1, s:  17, t: "car",   p: 0, v0: 11 },
+        { ax: "x", at:  0.0, dir:  1, s:  32, t: "van",   p: 6, v0: 10 },
+        { ax: "x", at: -3.7, dir:  1, s:  25, t: "car",   p: 3, v0: 12 },
+        { ax: "x", at:  3.7, dir: -1, s:  22, t: "suv",   p: 1, v0: 12 },
+        { ax: "x", at:  7.4, dir: -1, s:  36, t: "car",   p: 2, v0: 13 },
+        { ax: "y", at:  3.7, dir:  1, s:  26, t: "car",   p: 4, v0: 10 },
+        { ax: "y", at:  0.0, dir: -1, s:  30, t: "suv",   p: 5, v0: 10 }
+      ] },
+    { road: "freeway", speed: 25, signal: false,
+      lanes: [{ ax: "x", at: 0, dir: 1 }, { ax: "x", at: -3.6, dir: 1 }, { ax: "x", at: 3.6, dir: 1 }],
+      cars: [
+        { ax: "x", at:  0.0, dir: 1, s:  24, t: "truck", p: 6, v0: 21.5 },
+        { ax: "x", at: -3.6, dir: 1, s:  34, t: "car",   p: 0, v0: 24.0 },
+        { ax: "x", at:  3.6, dir: 1, s:  38, t: "car",   p: 3, v0: 28.0 },
+        { ax: "x", at: -3.6, dir: 1, s: -20, t: "suv",   p: 1, v0: 29.5 },
+        { ax: "x", at:  3.6, dir: 1, s: -32, t: "car",   p: 4, v0: 26.0 }
+      ] },
+    { road: "leftturn", speed: 0, signal: false,
+      lanes: [{ ax: "x", at: 0.0, dir: 1 }, { ax: "x", at: -3.7, dir: 1 },
+              { ax: "x", at: 3.8, dir: -1 }, { ax: "x", at: 7.5, dir: -1 }],
+      cars: [
+        { ax: "x", at:  3.8, dir: -1, s:  9.5, t: "suv", p: 1, v0:  0 },
+        { ax: "x", at:  3.8, dir: -1, s: 30.0, t: "car", p: 2, v0: 14 },
+        { ax: "x", at:  7.5, dir: -1, s: 26.0, t: "car", p: 0, v0: 13 },
+        { ax: "x", at: -3.7, dir:  1, s: 17.0, t: "van", p: 6, v0:  7 }
+      ] }
+  ];
+
+  // ---------------------------------------------------------------- state
+  var cars = [], playing = true, dragIdx = -1, dragOff = [0, 0], hover = null;
+  var scene = 0, egoV = 11, egoWant = 11, travel = 0, simT = 0;
+  var occ = new Uint8Array(N * N), first = new Float32Array(NA), field = new Float32Array(N * N);
+  var img, fieldCv, roadCv, grainPat, corridor = { stop: 0, frac: 0 };
+
+  var cv = document.getElementById("bev");
+  var ctx = cv.getContext("2d", { alpha: false });
+  var box = document.getElementById("plateBox");
+  var sizePx = 600, dpr = 1;
+  var $ = function (id) { return document.getElementById(id); };
+
+  function wrapX(v) { return ((v + EXT) % SPAN + SPAN) % SPAN - EXT; }
+
+  function rr(c, x, y, w, h, r) {
+    r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+    c.beginPath();
+    if (c.roundRect) { c.roundRect(x, y, w, h, r); return; }
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);         c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+  function shade(hex, t) {
+    var n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    var f = function (v) { return Math.max(0, Math.min(255, t > 0 ? v + (255 - v) * t : v * (1 + t))) | 0; };
+    return "rgb(" + f(r) + "," + f(g) + "," + f(b) + ")";
+  }
+
+  // ---------------------------------------------------------------- road plate
+  var ASPHALT = "#3B3E42", ASPHALT2 = "#45484C", WALK = "#8C8B86", KERB = "#A5A49E",
+      GRASS = "#4A543F", WHITE = "#E6E4DC", YELLOW = "#E2BB3E", GRAVEL = "#6C6A63";
+
+  function grain() {
+    if (grainPat) return grainPat;
+    var px = Math.round(10 * RS);
+    var g = document.createElement("canvas"); g.width = g.height = px;
+    var gc = g.getContext("2d"), d = gc.createImageData(px, px);
+    for (var i = 0; i < px * px; i++) {
+      var n = 118 + (Math.random() * 76 - 38) | 0;
+      d.data[i * 4] = n; d.data[i * 4 + 1] = n; d.data[i * 4 + 2] = n;
+      d.data[i * 4 + 3] = Math.random() < 0.55 ? 40 : 15;
+    }
+    gc.putImageData(d, 0, 0);
+    grainPat = gc.createPattern(g, "repeat");
+    return grainPat;
+  }
+
+  function rx(Y) { return ROADPX / 2 - Y * RS; }
+  function ry(X) { return ROADPX / 2 - X * RS; }
+  function slab(c, x0, x1, y0, y1, fill) { c.fillStyle = fill; c.fillRect(rx(y1), ry(x1), (y1 - y0) * RS, (x1 - x0) * RS); }
+  function line(c, ax, at, from, to, w, col, dash) {
+    c.strokeStyle = col; c.lineWidth = w * RS; c.lineCap = "butt";
+    c.setLineDash(dash ? [dash[0] * RS, dash[1] * RS] : []); c.lineDashOffset = 0;
+    c.beginPath();
+    if (ax === "x") { c.moveTo(rx(at), ry(from)); c.lineTo(rx(at), ry(to)); }
+    else { c.moveTo(rx(from), ry(at)); c.lineTo(rx(to), ry(at)); }
+    c.stroke(); c.setLineDash([]);
+  }
+
+  var JX = 1.85, JY = 1.85;                       // junction centre in plate coordinates
+
+  function buildRoad(kind) {
+    if (!roadCv) { roadCv = document.createElement("canvas"); roadCv.width = roadCv.height = ROADPX; }
+    var c = roadCv.getContext("2d");
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, ROADPX, ROADPX);
+    var D = [3, 5];                                // 8 m dash period divides 80 m exactly
+
+    if (kind === "intersection") {
+      slab(c, -EXT, EXT, -EXT, EXT, "#6B6963");
+      slab(c, -EXT, EXT, JY - 11, JY + 11, WALK);
+      slab(c, JX - 11, JX + 11, -EXT, EXT, WALK);
+      slab(c, -EXT, EXT, JY - 7.4, JY + 7.4, ASPHALT);
+      slab(c, JX - 7.4, JX + 7.4, -EXT, EXT, ASPHALT);
+      c.fillStyle = grain(); c.fillRect(0, 0, ROADPX, ROADPX);
+      [JY - 7.4, JY + 7.4].forEach(function (y) {
+        line(c, "x", y, -EXT, JX - 7.6, 0.22, KERB); line(c, "x", y, JX + 7.6, EXT, 0.22, KERB);
+      });
+      [JX - 7.4, JX + 7.4].forEach(function (x) {
+        line(c, "y", x, -EXT, JY - 7.6, 0.22, KERB); line(c, "y", x, JY + 7.6, EXT, 0.22, KERB);
+      });
+      [-0.18, 0.18].forEach(function (o) {
+        line(c, "x", JY + o, -EXT, JX - 9, 0.13, YELLOW); line(c, "x", JY + o, JX + 9, EXT, 0.13, YELLOW);
+        line(c, "y", JX + o, -EXT, JY - 9, 0.13, YELLOW); line(c, "y", JX + o, JY + 9, EXT, 0.13, YELLOW);
+      });
+      [JY - 3.7, JY + 3.7].forEach(function (y) {
+        line(c, "x", y, -EXT, JX - 9, 0.13, WHITE, D); line(c, "x", y, JX + 9, EXT, 0.13, WHITE, D);
+      });
+      [JX - 3.7, JX + 3.7].forEach(function (x) {
+        line(c, "y", x, -EXT, JY - 9, 0.13, WHITE, D); line(c, "y", x, JY + 9, EXT, 0.13, WHITE, D);
+      });
+      [1, -1].forEach(function (g) {
+        for (var i = 0; i < 9; i++) {
+          var t = JY - 7.0 + i * 1.6;
+          slab(c, JX + g * 7.9, JX + g * 10.4, t, t + 0.85, WHITE);
+          slab(c, t - JY + JX, t - JY + JX + 0.85, JY + g * 7.9, JY + g * 10.4, WHITE);
+        }
+        line(c, "y", JX + g * 11.0, g > 0 ? JY - 7.3 : JY + 0.3, g > 0 ? JY - 0.3 : JY + 7.3, 0.4, WHITE);
+        line(c, "x", JY + g * 11.0, g > 0 ? JX + 0.3 : JX - 7.3, g > 0 ? JX + 7.3 : JX - 0.3, 0.4, WHITE);
+      });
+    } else if (kind === "freeway") {
+      slab(c, -EXT, EXT, -EXT, EXT, GRASS);
+      slab(c, -EXT, EXT, -8.0, 8.2, GRAVEL);
+      slab(c, -EXT, EXT, -5.4, 5.4, ASPHALT);
+      c.fillStyle = grain(); c.fillRect(0, 0, ROADPX, ROADPX);
+      line(c, "x", -5.3, -EXT, EXT, 0.17, WHITE);
+      line(c, "x",  5.3, -EXT, EXT, 0.17, YELLOW);
+      [-1.8, 1.8].forEach(function (y) { line(c, "x", y, -EXT, EXT, 0.13, WHITE, D); });
+      for (var m = -EXT; m < EXT; m += 20) slab(c, m, m + 11, 7.6, 8.1, "#9A9890");
+      for (var k = -EXT; k < EXT; k += 40) slab(c, k + 3, k + 3.5, -7.6, -6.2, "#8E9C7E");
+    } else {
+      var yl = 1.9;
+      slab(c, -EXT, EXT, -EXT, EXT, "#6B6963");
+      slab(c, -EXT, EXT, yl - 11, yl + 11, WALK);
+      slab(c, -EXT, EXT, yl - 7.4, yl + 7.4, ASPHALT);
+      c.fillStyle = grain(); c.fillRect(0, 0, ROADPX, ROADPX);
+      line(c, "x", yl - 7.4, -EXT, EXT, 0.22, KERB);
+      line(c, "x", yl + 7.4, -EXT, EXT, 0.22, KERB);
+      [-0.2, 0.2].forEach(function (o) { line(c, "x", yl + o, -EXT, EXT, 0.13, YELLOW); });
+      [yl - 3.7, yl + 3.7].forEach(function (y) { line(c, "x", y, -EXT, EXT, 0.13, WHITE, D); });
+      slab(c, -6.0, -2.4, -5.0, -2.2, ASPHALT2);
+      for (var a = 0; a < 4; a++) slab(c, 4 + a * 4, 5.6 + a * 4, yl - 0.9, yl - 0.5, WHITE);
+    }
+  }
+
+  // ---------------------------------------------------------------- traffic model
+  // Every vehicle lives on a lane and carries a longitudinal coordinate s that
+  // increases in its own direction of travel. Nothing moves laterally, nothing
+  // overtakes, and no two vehicles can occupy the same stretch of a lane.
+  function phase() {                                     // 0 main green, 1 cross green, -1 all red
+    var t = simT % CYCLE;
+    if (t < G_MAIN) return 0;
+    if (t < G_MAIN + AMBER) return -1;
+    if (t < G_MAIN + AMBER + G_CROSS) return 1;
+    return -1;
+  }
+
+  function egoPos(c) { return c.ax === "x" ? c.dir * c.sx : c.dir * c.sy; }
+
+  function place(c) {                                    // lane coordinates -> ego-frame x, y
+    if (c.ax === "x") { c.x = c.dir * c.s; c.y = c.at; }
+    else { c.x = wrapX(c.at - travel); c.y = c.dir * c.s; }
+  }
+
+  function stopLine(c) {                                 // signal obstacle in lane coordinates
+    if (!SCENES[scene].signal) return null;
+    var ph = phase(), green = (c.ax === "x") ? ph === 0 : ph === 1;
+    if (green) return null;
+    var jx = wrapX(JX - travel), u;
+    if (c.ax === "x") u = c.dir > 0 ? jx - JHALF : -(jx + JHALF);
+    else u = c.dir > 0 ? JY - JHALF : -(JY + JHALF);
+    var mine = c.isEgo ? 0 : c.s;
+    var ahead = u - mine;
+    return (ahead > -1.0 && ahead < 55) ? u : null;
+  }
+
+  function idm(v, v0, gap, vLead) {
+    if (v0 <= 0.01) return (0 - v) * 2.0;
+    var dv = v - vLead;
+    var sStar = IDM_S0 + Math.max(0, v * IDM_T + v * dv / (2 * Math.sqrt(IDM_A * IDM_B)));
+    var free = 1 - Math.pow(v / v0, 4);
+    var inter = gap < 1e8 ? Math.pow(sStar / Math.max(gap, 0.3), 2) : 0;
+    return Math.max(-7, IDM_A * (free - inter));
+  }
+
+  function stepTraffic(dt) {
+    var buckets = {};
+    for (var i = 0; i < cars.length; i++) {
+      var c = cars[i];
+      c.s = c.ax === "x" ? c.dir * c.x : c.dir * c.y;
+      var key = c.ax + "|" + c.at + "|" + c.dir;
+      (buckets[key] = buckets[key] || []).push(c);
+    }
+    var ego = { isEgo: true, ax: "x", at: 0, dir: 1, s: 0, v: egoV,
+                front: SHAPE.ego.front, rear: SHAPE.ego.rear, t: "ego" };
+    var ek = "x|0|1"; (buckets[ek] = buckets[ek] || []).push(ego);
+
+    Object.keys(buckets).forEach(function (key) {
+      var list = buckets[key].sort(function (a, b) { return a.s - b.s; });
+      for (var i = 0; i < list.length; i++) {
+        var c = list[i], lead = list[i + 1], gap = 1e9, vl = 0;
+        var fr = c.isEgo ? SHAPE.ego.front : SHAPE[c.t].front;
+        if (lead) {
+          var lr = lead.isEgo ? SHAPE.ego.rear : SHAPE[lead.t].rear;
+          gap = (lead.s + lr) - (c.s + fr); vl = lead.v;
+        }
+        var sl = stopLine(c);
+        if (sl !== null) {
+          var g2 = sl - (c.s + fr);
+          if (g2 < gap) { gap = g2; vl = 0; }
+        }
+        c.acc = idm(c.v, c.isEgo ? egoWant : c.v0, gap, vl);
+      }
+    });
+
+    for (var j = 0; j < cars.length; j++) {
+      var d = cars[j];
+      if (j === dragIdx) { d.v = 0; continue; }
+      d.v = Math.max(0, d.v + d.acc * dt);
+      d.s += d.v * dt;
+    }
+    egoV = Math.max(0, egoV + ego.acc * dt);
+    travel += egoV * dt;
+
+    for (var k = 0; k < cars.length; k++) {
+      var c2 = cars[k];
+      if (k === dragIdx) continue;
+      if (c2.ax === "x") c2.s -= c2.dir * egoV * dt;      // the ego's own motion, in lane terms
+      recycle(c2);
+      place(c2);
+    }
+  }
+
+  function recycle(c) {                                  // leave the window, re-enter behind the queue
+    if (c.s > 46 || c.s < -46) {
+      var same = cars.filter(function (o) {
+        return o !== c && o.ax === c.ax && o.at === c.at && o.dir === c.dir;
+      });
+      var back = -44;
+      same.forEach(function (o) {
+        if (o.s < 0) back = Math.min(back, o.s - SHAPE[o.t].front + SHAPE[c.t].rear - 16);
+      });
+      c.s = c.s > 46 ? back : Math.max(44, back + 88);
+      if (c.s < -46) c.s = -46;
+      c.v = Math.min(c.v0, c.v + 3);
+    }
+  }
+
+  function laneFree(ax, at, dir, s, t) {
+    for (var i = 0; i < cars.length; i++) {
+      var o = cars[i];
+      if (o.ax !== ax || o.at !== at || o.dir !== dir) continue;
+      if (Math.abs(o.s - s) < SHAPE[t].front - SHAPE[t].rear + 14) return false;
+    }
+    if (ax === "x" && at === 0 && dir === 1 && Math.abs(s) < 18) return false;   // keep clear of the ego
+    return true;
+  }
+
+  // ---------------------------------------------------------------- vehicles
+  function wheels(c, s, y, w, n) {
+    c.fillStyle = "#15181A";
+    for (var i = 0; i < n; i++) {
+      var off = i * 0.95 * s;
+      rr(c, -w / 2 - 0.07 * s, y + off, 0.26 * s, 0.68 * s, 0.1 * s); c.fill();
+      rr(c, w / 2 - 0.19 * s, y + off, 0.26 * s, 0.68 * s, 0.1 * s); c.fill();
+    }
+  }
+
+  function vehicle(c, car, s, hot) {
+    var cx = sizePx / 2 - car.y * s, cy = sizePx / 2 - car.x * s;
+    c.save(); c.translate(cx, cy); c.rotate(-car.yaw);
+    var boxes = SHAPE[car.t], col = PAINT[car.p % PAINT.length];
+
+    c.save(); c.translate(2.5, 3); c.fillStyle = "rgba(0,0,0,0.33)";
+    boxes.forEach(function (b) { rr(c, -b.W * s / 2, -(b.du + b.L / 2) * s, b.W * s, b.L * s, 0.35 * s); c.fill(); });
+    c.restore();
+
+    boxes.forEach(function (b, bi) {
+      var w = b.W * s, l = b.L * s, top = -(b.du + b.L / 2) * s;
+      var trailer = car.t === "truck" && bi === 1;
+      var g = c.createLinearGradient(-w / 2, 0, w / 2, 0);
+      if (trailer) { g.addColorStop(0, "#9DA2A6"); g.addColorStop(0.45, "#D6D9DA"); g.addColorStop(1, "#8E9397"); }
+      else {
+        g.addColorStop(0, shade(col, -0.3)); g.addColorStop(0.35, shade(col, 0.16));
+        g.addColorStop(0.62, shade(col, -0.05)); g.addColorStop(1, shade(col, -0.38));
+      }
+      rr(c, -w / 2, top, w, l, (trailer ? 0.12 : 0.42) * s); c.fillStyle = g; c.fill();
+      c.lineWidth = Math.max(0.8, 0.05 * s); c.strokeStyle = "rgba(0,0,0,0.5)"; c.stroke();
+
+      if (trailer) {
+        c.strokeStyle = "rgba(0,0,0,0.15)"; c.lineWidth = Math.max(0.6, 0.03 * s);
+        for (var k = 1; k < 12; k++) {
+          var yy = top + l * k / 12;
+          c.beginPath(); c.moveTo(-w / 2 + 0.06 * s, yy); c.lineTo(w / 2 - 0.06 * s, yy); c.stroke();
+        }
+        c.fillStyle = "rgba(196,58,46,0.9)";
+        rr(c, -w / 2 + 0.12 * s, top + l - 0.22 * s, 0.5 * s, 0.17 * s, 0.06 * s); c.fill();
+        rr(c, w / 2 - 0.62 * s, top + l - 0.22 * s, 0.5 * s, 0.17 * s, 0.06 * s); c.fill();
+        wheels(c, s, top + l * 0.84, w, 2);
+        return;
+      }
+
+      var isTractor = car.t === "truck" && bi === 0;
+      var glass = c.createLinearGradient(0, top, 0, top + l);
+      glass.addColorStop(0, "#2A3339"); glass.addColorStop(0.5, "#3E4C55"); glass.addColorStop(1, "#242B30");
+      if (isTractor) {
+        rr(c, -w / 2 + 0.16 * s, top + 0.25 * s, w - 0.32 * s, 1.4 * s, 0.14 * s); c.fillStyle = glass; c.fill();
+        rr(c, -w / 2 + 0.2 * s, top + 2.0 * s, w - 0.4 * s, 3.4 * s, 0.16 * s); c.fillStyle = shade(col, 0.07); c.fill();
+      } else {
+        rr(c, -w / 2 + 0.17 * s, top + l * 0.22, w - 0.34 * s, l * 0.56, 0.3 * s); c.fillStyle = glass; c.fill();
+        rr(c, -w / 2 + 0.3 * s, top + l * 0.37, w - 0.6 * s, l * 0.27, 0.22 * s); c.fillStyle = shade(col, 0.1); c.fill();
+        c.fillStyle = "rgba(255,255,255,0.10)";
+        rr(c, -w / 2 + 0.22 * s, top + l * 0.235, w - 0.44 * s, l * 0.11, 0.1 * s); c.fill();
+      }
+      c.fillStyle = shade(col, -0.22);
+      c.fillRect(-w / 2 - 0.22 * s, top + l * 0.26, 0.22 * s, 0.3 * s);
+      c.fillRect(w / 2, top + l * 0.26, 0.22 * s, 0.3 * s);
+      c.fillStyle = "rgba(255,238,200,0.92)";
+      rr(c, -w / 2 + 0.16 * s, top + 0.04 * s, 0.46 * s, 0.17 * s, 0.07 * s); c.fill();
+      rr(c, w / 2 - 0.62 * s, top + 0.04 * s, 0.46 * s, 0.17 * s, 0.07 * s); c.fill();
+      var braking = car.acc !== undefined && car.acc < -0.6;
+      c.fillStyle = braking ? "rgba(255,70,52,0.98)" : "rgba(196,58,46,0.92)";
+      rr(c, -w / 2 + 0.14 * s, top + l - 0.2 * s, 0.5 * s, 0.16 * s, 0.06 * s); c.fill();
+      rr(c, w / 2 - 0.64 * s, top + l - 0.2 * s, 0.5 * s, 0.16 * s, 0.06 * s); c.fill();
+      wheels(c, s, top + l * 0.19, w, 1); wheels(c, s, top + l * 0.81, w, 1);
+    });
+    c.restore();
+
+    if (car.t === "ego" || car.o === undefined) return;
+
+    var lo = car.o < BLIND, sh = SHAPE[car.t];
+    var mid = (sh.front + sh.rear) / 2, len = sh.front - sh.rear;
+    c.save(); c.translate(cx, cy); c.rotate(-car.yaw);
+    c.setLineDash(lo ? [5, 4] : []);
+    c.strokeStyle = lo ? "rgba(224,162,63,0.95)" : (hot ? "rgba(255,255,255,0.95)" : "rgba(126,226,201,0.7)");
+    c.lineWidth = lo || hot ? 2 : 1.3;
+    rr(c, -sh.wide * s / 2 - 3, -(mid + len / 2) * s - 3, sh.wide * s + 6, len * s + 6, 0.4 * s);
+    c.stroke(); c.setLineDash([]);
+    c.restore();
+
+    if ($("cLabels").checked) {
+      c.save();
+      c.font = "600 11px " + getComputedStyle(document.body).getPropertyValue("--mono");
+      c.textAlign = "center";
+      var ext = Math.max(Math.abs(sh.front), Math.abs(sh.rear));
+      var ty = cy - ext * s - 9, txt = car.o.toFixed(2), tw = c.measureText(txt).width + 10;
+      c.fillStyle = lo ? "rgba(140,82,10,0.92)" : "rgba(14,44,40,0.88)";
+      rr(c, cx - tw / 2, ty - 11, tw, 15, 3); c.fill();
+      c.fillStyle = lo ? "#FFDFA6" : "#A9EFDC";
+      c.fillText(txt, cx, ty);
+      c.restore();
+    }
+  }
+
+  // ---------------------------------------------------------------- geometry
+  function boxCells(car, cb) {
+    var cy = Math.cos(car.yaw), sy = Math.sin(car.yaw), boxes = SHAPE[car.t];
+    for (var bi = 0; bi < boxes.length; bi++) {
+      var b = boxes[bi], ox = car.x + cy * b.du, oy = car.y + sy * b.du;
+      var hl = b.L / 2, hw = b.W / 2, rad = Math.ceil((hl + 0.5) / RES);
+      var ci = Math.floor((EXT - ox) / RES), cj = Math.floor((EXT - oy) / RES);
+      for (var py = ci - rad; py <= ci + rad; py++) {
+        if (py < 0 || py >= N) continue;
+        var X = EXT - (py + 0.5) * RES;
+        for (var pxi = cj - rad; pxi <= cj + rad; pxi++) {
+          if (pxi < 0 || pxi >= N) continue;
+          var Y = EXT - (pxi + 0.5) * RES, dx = X - ox, dy = Y - oy;
+          if (Math.abs(dx * cy + dy * sy) <= hl && Math.abs(-dx * sy + dy * cy) <= hw) cb(py * N + pxi);
+        }
+      }
+    }
+  }
+  function rasterise() {
+    occ.fill(0);
+    for (var c = 0; c < cars.length; c++) boxCells(cars[c], function (i) { occ[i] = 1; });
+  }
+  function marchRays() {
+    for (var a = 0; a < NA; a++) {
+      var th = a * 2 * Math.PI / NA, dx = Math.cos(th), dy = Math.sin(th), hit = Infinity;
+      for (var r = 2.4; r < RMAX; r += STEP) {
+        var X = dx * r, Y = dy * r;
+        if (X < -EXT || X >= EXT || Y < -EXT || Y >= EXT) break;
+        if (occ[((EXT - X) / RES | 0) * N + ((EXT - Y) / RES | 0)]) { hit = r; break; }
+      }
+      first[a] = hit;
+    }
+  }
+  function score() {
+    var k = NA / (2 * Math.PI), tol = RES * 1.5;
+    for (var py = 0; py < N; py++) {
+      var X = EXT - (py + 0.5) * RES;
+      for (var pxi = 0; pxi < N; pxi++) {
+        var Y = EXT - (pxi + 0.5) * RES, d = Math.sqrt(X * X + Y * Y), idx = py * N + pxi;
+        if (d < 1.4) { field[idx] = 1; continue; }
+        var th = Math.atan2(Y, X);
+        var bin = Math.floor((th < 0 ? th + 2 * Math.PI : th) * k) % NA;
+        var o = 0;
+        if (d <= first[bin] + tol) {
+          for (var c = 0; c < CAMS.length; c++) {
+            var cam = CAMS[c], diff = th - cam.yawR;
+            while (diff > Math.PI) diff -= 2 * Math.PI;
+            while (diff < -Math.PI) diff += 2 * Math.PI;
+            if (Math.abs(diff) > cam.half) continue;
+            var cov = cam.k / (d * d); if (cov > 1) cov = 1;
+            if (cov > o) o = cov;
+          }
+        }
+        field[idx] = o;
+      }
+    }
+  }
+  function scoreObjects() {
+    for (var i = 0; i < cars.length; i++) {
+      var car = cars[i], mx = 0;
+      boxCells(car, function (ix) { if (field[ix] > mx) mx = field[ix]; });
+      car.o = mx; car.d = Math.hypot(car.x, car.y);
+    }
+  }
+  function scoreCorridor() {
+    var stop = egoV * T_REACT + egoV * egoV / (2 * DECEL);
+    var to = Math.min(stop, EXT - 1), seen = 0, tot = 0;
+    for (var py = 0; py < N; py++) {
+      var X = EXT - (py + 0.5) * RES;
+      if (X < 2.3 || X > to) continue;
+      for (var pxi = 0; pxi < N; pxi++) {
+        var Y = EXT - (pxi + 0.5) * RES;
+        if (Math.abs(Y) > LANE_W / 2) continue;
+        tot++; if (field[py * N + pxi] >= BLIND) seen++;
+      }
+    }
+    corridor.stop = stop; corridor.frac = tot ? seen / tot : 1;
+  }
+
+  // ---------------------------------------------------------------- drawing
+  function resize() {
+    var r = box.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    sizePx = Math.max(240, Math.round(r.width));
+    cv.width = Math.round(sizePx * dpr); cv.height = Math.round(sizePx * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function w2s(X, Y) { var s = sizePx / SPAN; return [sizePx / 2 - Y * s, sizePx / 2 - X * s]; }
+
+  function paintField() {
+    if (!img) { img = ctx.createImageData(N, N); fieldCv = document.createElement("canvas"); fieldCv.width = fieldCv.height = N; }
+    var mark = $("cBlind").checked, d = img.data;
+    for (var i = 0; i < N * N; i++) {
+      var o = field[i], j = i * 4;
+      if (mark && o < BLIND) { d[j] = 190; d[j + 1] = 124; d[j + 2] = 30; d[j + 3] = 150; continue; }
+      var t = Math.pow(o, 0.6);
+      d[j] = 8 + 66 * t; d[j + 1] = 14 + 200 * t; d[j + 2] = 18 + 166 * t;
+      d[j + 3] = 255 * (0.90 * Math.pow(1 - o, 0.75) + 0.13 * o);
+    }
+    fieldCv.getContext("2d").putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(fieldCv, 0, 0, sizePx, sizePx);
+  }
+
+  function drawSignals(s) {
+    if (!SCENES[scene].signal) return;
+    var ph = phase(), jx = wrapX(JX - travel);
+    var col = function (gr) { return ph === -1 ? "#E0A23F" : gr ? "#4CD08A" : "#D9483C"; };
+    [[jx - JHALF - 0.7, JY - 8.6, true], [jx + JHALF + 0.7, JY + 8.6, true],
+     [jx + 8.6, JY - JHALF - 0.7, false], [jx - 8.6, JY + JHALF + 0.7, false]
+    ].forEach(function (p) {
+      if (Math.abs(p[0]) > EXT - 1 || Math.abs(p[1]) > EXT - 1) return;
+      var q = w2s(p[0], p[1]);
+      ctx.save();
+      ctx.fillStyle = "rgba(18,22,25,0.9)";
+      rr(ctx, q[0] - 6, q[1] - 6, 12, 12, 3); ctx.fill();
+      ctx.fillStyle = col(p[2] ? ph === 0 : ph === 1);
+      ctx.beginPath(); ctx.arc(q[0], q[1], 3.4, 0, 2 * Math.PI); ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  function draw() {
+    var s = sizePx / SPAN, c0 = w2s(0, 0);
+    ctx.imageSmoothingEnabled = true;
+    var dy = (((travel % SPAN) + SPAN) % SPAN) * s;
+    ctx.drawImage(roadCv, 0, dy - sizePx, sizePx, sizePx);
+    ctx.drawImage(roadCv, 0, dy, sizePx, sizePx);
+    drawSignals(s);
+    if ($("cField").checked) paintField();
+    ctx.imageSmoothingEnabled = true;
+
+    if ($("cFov").checked) {
+      ctx.save(); ctx.strokeStyle = "rgba(150,225,210,0.32)"; ctx.lineWidth = 1;
+      CAMS.forEach(function (cam) {
+        [cam.yawR - cam.half, cam.yawR + cam.half].forEach(function (a) {
+          var e = w2s(Math.cos(a) * EXT * 1.5, Math.sin(a) * EXT * 1.5);
+          ctx.beginPath(); ctx.moveTo(c0[0], c0[1]); ctx.lineTo(e[0], e[1]); ctx.stroke();
+        });
+      });
+      ctx.restore();
+    }
+
+    if ($("cRings").checked) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(220,240,242,0.20)"; ctx.lineWidth = 1;
+      ctx.fillStyle = "rgba(226,240,243,0.6)";
+      ctx.font = "500 10px " + getComputedStyle(document.body).getPropertyValue("--mono");
+      ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 3;
+      [10, 20, 30, 40].forEach(function (m) {
+        ctx.beginPath(); ctx.arc(c0[0], c0[1], m * s, 0, 2 * Math.PI); ctx.stroke();
+        ctx.fillText(m + " m", c0[0] + 4, c0[1] - m * s - 4);
+      });
+      ctx.restore();
+    }
+
+    if ($("cCorr").checked && egoV > 0.3) {
+      var to = Math.min(corridor.stop, EXT - 0.5);
+      var a = w2s(to, LANE_W / 2), b = w2s(2.3, -LANE_W / 2);
+      ctx.save();
+      ctx.strokeStyle = corridor.frac > 0.85 ? "rgba(126,226,201,0.85)" : "rgba(224,162,63,0.95)";
+      ctx.setLineDash([7, 5]); ctx.lineWidth = 1.6;
+      ctx.strokeRect(a[0], a[1], b[0] - a[0], b[1] - a[1]);
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], a[1]); ctx.lineWidth = 2.4; ctx.stroke();
+      ctx.font = "600 11px " + getComputedStyle(document.body).getPropertyValue("--mono");
+      ctx.fillStyle = corridor.frac > 0.85 ? "#A9EFDC" : "#FFD79A";
+      ctx.textAlign = "left"; ctx.shadowColor = "rgba(0,0,0,0.85)"; ctx.shadowBlur = 4;
+      ctx.fillText("stop " + corridor.stop.toFixed(0) + " m" + (corridor.stop > EXT ? " (beyond grid)" : ""),
+                   b[0] + 8, a[1] + 4);
+      ctx.restore();
+    }
+
+    for (var i = 0; i < cars.length; i++) vehicle(ctx, cars[i], s, i === dragIdx);
+    vehicle(ctx, { x: 0, y: 0, yaw: 0, t: "ego", p: EGO_PAINT }, s, false);
+
+    if (hover) {
+      var hp = w2s(hover.X, hover.Y);
+      ctx.beginPath(); ctx.arc(hp[0], hp[1], 5, 0, 2 * Math.PI);
+      ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 1.4; ctx.stroke();
+    }
+  }
+
+  // ---------------------------------------------------------------- panel
+  function stats() {
+    var blind = 0, good = 0, tot = 0;
+    for (var py = 0; py < N; py++) {
+      var X = EXT - (py + 0.5) * RES;
+      for (var pxi = 0; pxi < N; pxi++) {
+        var Y = EXT - (pxi + 0.5) * RES;
+        if (X * X + Y * Y > EXT * EXT) continue;
+        var o = field[py * N + pxi]; tot++;
+        if (o < BLIND) blind++; if (o >= 0.5) good++;
+      }
+    }
+    $("sBlind").textContent = (100 * blind / tot).toFixed(1) + " %";
+    $("sGood").textContent = (100 * good / tot).toFixed(1) + " %";
+    $("sCars").textContent = cars.length;
+    $("sActual").textContent = egoV.toFixed(1) + " m/s";
+    $("sStop").textContent = corridor.stop.toFixed(1) + " m";
+    var cf = $("sCorr");
+    cf.textContent = (100 * corridor.frac).toFixed(0) + " %";
+    cf.className = corridor.frac > 0.85 ? "hit" : corridor.frac > 0.6 ? "warn" : "bad";
+
+    var sorted = cars.slice().sort(function (a, b) { return a.o - b.o; });
+    var un = sorted.filter(function (c) { return c.o < BLIND; })
+                   .sort(function (a, b) { return a.d - b.d; })[0];
+    var ne = $("sNear");
+    ne.textContent = un ? NAMES[un.t] + " at " + un.d.toFixed(1) + " m" : "none";
+    ne.className = un ? "bad" : "hit";
+
+    var html = "";
+    sorted.slice(0, 7).forEach(function (c) {
+      var lo = c.o < BLIND;
+      html += '<div class="obj"><i style="background:' +
+        (lo ? "var(--amber)" : c.o < 0.5 ? "#6FBFA8" : "var(--teal)") + '"></i>' +
+        '<span class="nm">' + NAMES[c.t] + '</span>' +
+        '<span class="rg">' + c.d.toFixed(1) + ' m</span>' +
+        '<span style="color:' + (lo ? "var(--amber)" : "var(--ink)") + '">' + c.o.toFixed(3) + '</span></div>';
+    });
+    $("objList").innerHTML = html;
+
+    var ph = phase();
+    $("hudTop").innerHTML = "ego <b>" + egoV.toFixed(1) + " m/s</b>" +
+      (SCENES[scene].signal ? ' <em>&middot; signal ' +
+        (ph === 0 ? "green" : ph === 1 ? "red, cross traffic" : "amber") + "</em>" : "");
+  }
+
+  function readout() {
+    var val = $("oVal");
+    if (!hover) {
+      val.textContent = "—"; val.classList.add("dim");
+      ["oRange", "oCam", "oCov", "oVis"].forEach(function (k) { $(k).textContent = "—"; });
+      $("oMeter").style.width = "0%"; return;
+    }
+    val.textContent = hover.o.toFixed(3);
+    val.classList.toggle("dim", hover.o < BLIND);
+    $("oRange").textContent = hover.d.toFixed(1) + " m";
+    $("oCam").textContent = hover.cam;
+    $("oCov").textContent = hover.cov === null ? "—" : hover.cov.toFixed(3);
+    $("oVis").textContent = hover.vis ? "visible" : "occluded";
+    $("oMeter").style.width = (hover.o * 100).toFixed(1) + "%";
+  }
+
+  function falloffCheck() {
+    [[20, "v20"], [40, "v40"], [70, "v70"]].forEach(function (p) {
+      $(p[1]).textContent = Math.min(1, CAMS[0].k / (p[0] * p[0])).toFixed(4);
+    });
+  }
+
+  function probe(X, Y) {
+    var d = Math.hypot(X, Y), th = Math.atan2(Y, X);
+    var bin = Math.floor((th < 0 ? th + 2 * Math.PI : th) * NA / (2 * Math.PI)) % NA;
+    var vis = d <= first[bin] + RES * 1.5, o = 0, cam = "none in view", cov = null;
+    for (var c = 0; c < CAMS.length; c++) {
+      var k = CAMS[c], diff = th - k.yawR;
+      while (diff > Math.PI) diff -= 2 * Math.PI;
+      while (diff < -Math.PI) diff += 2 * Math.PI;
+      if (Math.abs(diff) > k.half) continue;
+      var cv2 = Math.min(1, k.k / (d * d));
+      if (cov === null || cv2 > cov) { cov = cv2; cam = k.id; }
+      if (vis && cv2 > o) o = cv2;
+    }
+    hover = { X: X, Y: Y, d: d, o: o, cam: cam, cov: cov, vis: vis };
+  }
+
+  // ---------------------------------------------------------------- loop
+  var last = performance.now(), acc = 0;
+  function tick(now) {
+    var dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (playing) { simT += dt; stepTraffic(dt); }
+    rasterise(); marchRays(); score(); scoreObjects(); scoreCorridor();
+    if (hover) probe(hover.X, hover.Y);
+    draw(); readout();
+    acc += dt; if (acc > 0.2) { acc = 0; stats(); }
+    requestAnimationFrame(tick);
+  }
+
+  // ---------------------------------------------------------------- input
+  function toWorld(ev) {
+    var r = cv.getBoundingClientRect(), s = sizePx / SPAN;
+    var sx = (ev.clientX - r.left) * (sizePx / r.width);
+    var sy = (ev.clientY - r.top) * (sizePx / r.height);
+    return [(sizePx / 2 - sy) / s, (sizePx / 2 - sx) / s];
+  }
+
+  box.addEventListener("pointerdown", function (ev) {
+    var w = toWorld(ev), bestD = 1e9, pick = -1;
+    for (var i = 0; i < cars.length; i++) {
+      var car = cars[i], cy = Math.cos(car.yaw), sy = Math.sin(car.yaw);
+      SHAPE[car.t].forEach(function (b) {
+        var d = Math.hypot(car.x + cy * b.du - w[0], car.y + sy * b.du - w[1]);
+        if (d < Math.max(3.0, b.L * 0.6) && d < bestD) { bestD = d; pick = i; }
+      });
+    }
+    if (pick >= 0) {
+      dragIdx = pick; dragOff = [cars[pick].x - w[0], cars[pick].y - w[1]];
+      box.setPointerCapture(ev.pointerId); box.style.cursor = "grabbing";
+    }
+  });
+
+  // Dragging slides a vehicle along its own lane. It cannot be pulled off the
+  // road, and it cannot be pushed through the vehicle in front of it.
+  box.addEventListener("pointermove", function (ev) {
+    var w = toWorld(ev);
+    if (dragIdx >= 0) {
+      var c = cars[dragIdx];
+      var want = c.ax === "x" ? c.dir * (w[0] + dragOff[0]) : c.dir * (w[1] + dragOff[1]);
+      var lo = -44, hi = 44;
+      cars.forEach(function (o) {
+        if (o === c || o.ax !== c.ax || o.at !== c.at || o.dir !== c.dir) return;
+        if (o.s > c.s) hi = Math.min(hi, o.s + SHAPE[o.t].rear - SHAPE[c.t].front - 1.0);
+        else lo = Math.max(lo, o.s + SHAPE[o.t].front - SHAPE[c.t].rear + 1.0);
+      });
+      if (c.ax === "x" && c.at === 0 && c.dir === 1) {       // the ego occupies s = 0
+        if (c.s > 0) lo = Math.max(lo, SHAPE.ego.front - SHAPE[c.t].rear + 1.0);
+        else hi = Math.min(hi, SHAPE.ego.rear - SHAPE[c.t].front - 1.0);
+      }
+      c.s = Math.max(lo, Math.min(hi, want));
+      place(c);
+    }
+    probe(w[0], w[1]);
+  });
+
+  function release(ev) {
+    if (dragIdx >= 0) { try { box.releasePointerCapture(ev.pointerId); } catch (e) {} }
+    dragIdx = -1; box.style.cursor = "crosshair";
+  }
+  box.addEventListener("pointerup", release);
+  box.addEventListener("pointercancel", release);
+  box.addEventListener("pointerleave", function () { if (dragIdx < 0) { hover = null; readout(); } });
+
+  function setWant(v) {
+    egoWant = v;
+    $("rSpeed").value = v;
+    $("oSpeed").innerHTML = v.toFixed(1) + " m/s<br><small>desired, " + Math.round(v * 3.6) + " km/h</small>";
+  }
+  $("rSpeed").addEventListener("input", function () { setWant(parseFloat(this.value)); });
+
+  function loadScene(n) {
+    scene = n; travel = 0; simT = 0;
+    cars = SCENES[n].cars.map(function (c) {
+      var o = { ax: c.ax, at: c.at, dir: c.dir, s: c.s, t: c.t, p: c.p, v0: c.v0, v: c.v0,
+                o: 0, d: 0, acc: 0, yaw: 0 };
+      o.yaw = c.ax === "x" ? (c.dir > 0 ? 0 : Math.PI) : (c.dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+      place(o);
+      return o;
+    });
+    buildRoad(SCENES[n].road);
+    egoV = SCENES[n].speed; setWant(SCENES[n].speed);
+    [0, 1, 2].forEach(function (i) { $("bScene" + i).setAttribute("aria-pressed", i === n ? "true" : "false"); });
+  }
+  [0, 1, 2].forEach(function (i) { $("bScene" + i).addEventListener("click", function () { loadScene(i); }); });
+
+  $("bAdd").addEventListener("click", function () {
+    var L = SCENES[scene].lanes, t = Math.random() < 0.18 ? "suv" : "car";
+    for (var tries = 0; tries < 40; tries++) {
+      var ln = L[(Math.random() * L.length) | 0];
+      var s = -40 + Math.random() * 78;
+      if (!laneFree(ln.ax, ln.at, ln.dir, s, t)) continue;
+      var v0 = ln.ax === "x" ? Math.max(4, egoWant + (Math.random() * 8 - 4)) : 8 + Math.random() * 4;
+      var o = { ax: ln.ax, at: ln.at, dir: ln.dir, s: s, t: t, p: (Math.random() * 8) | 0,
+                v0: v0, v: v0, o: 0, d: 0, acc: 0, yaw: 0 };
+      o.yaw = ln.ax === "x" ? (ln.dir > 0 ? 0 : Math.PI) : (ln.dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+      place(o); cars.push(o); return;
+    }
+  });
+
+  var play = $("bPlay");
+  play.addEventListener("click", function () {
+    playing = !playing;
+    play.setAttribute("aria-pressed", playing ? "true" : "false");
+    play.textContent = playing ? "Pause" : "Play";
+  });
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    playing = false; play.setAttribute("aria-pressed", "false"); play.textContent = "Play";
+  }
+
+  window.addEventListener("resize", resize);
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(box);
+
+  resize(); loadScene(0); falloffCheck();
+  rasterise(); marchRays(); score(); scoreObjects(); scoreCorridor(); stats(); draw();
+  requestAnimationFrame(tick);
+})();
+</script>
+
+</body></html>
